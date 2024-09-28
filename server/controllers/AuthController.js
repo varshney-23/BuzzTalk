@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/UserModel.js";
+import { compare } from "bcrypt";
 
 const maxAge = 3 * 24 * 60 * 60 * 1000;
 const createToken = (email, userId)=>{
@@ -13,6 +14,12 @@ export const signup = async (req, res, next) =>{
         if(!email || !password){
             return res.status(400).send("Fill the Required Field");
         }
+        
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(401).send("Email Already Exists");
+        }
+
         const user = await User.create({email, password});
         res.cookie("jwt", createToken(email, user.id), {
             maxAge,
@@ -31,6 +38,42 @@ export const signup = async (req, res, next) =>{
         })
     } catch (error){
         console.log(error);
+        return res.status(500).send("Internal Server Error");
+    }
+}
+
+export const login = async(req, res)=>{
+    try{
+        const {email, password} = req.body;
+        if(!email || !password){
+            return res.status(400).send("Fill all the Required Field.");
+        }
+        const user = await User.findOne({ email });
+        if(!user){
+            return res.status(401).send("User Already Exists.");
+        }
+        const auth = await compare(password, user.password);
+        if(!auth){
+            return res.status(402).send("Password is Incorrect.");
+        }
+        res.cookie("jwt", createToken(email, user.id), {
+            maxAge,
+            secure: true,
+            sameSite: "None",
+        });
+        return res.status(201).json({
+            user:{
+                id: user.id,
+                email: user.email,
+                profileSetup: user.profileSetup,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                image: user.image,
+                color: user.color,
+            }
+        })        
+
+    } catch (error){
         return res.status(500).send("Internal Server Error");
     }
 }
